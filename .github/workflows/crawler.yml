@@ -1,0 +1,31 @@
+name: Crawl VentureBeat Articles
+
+on:
+  schedule:
+    # KST 08:45 is 23:45 UTC the previous day
+    - cron: '45 23 * * *'
+  workflow_dispatch: # Allows manual runs
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run crawler
+        run: python -X utf8 vb_crawler.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
