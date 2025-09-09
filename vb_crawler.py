@@ -66,8 +66,6 @@ def crawl_venturebeat():
 
         articles = []
         utc = pytz.utc
-        now = datetime.now(utc)
-        one_day_ago = now - timedelta(days=1)
 
         article_elements = soup.find_all('article')
 
@@ -92,19 +90,18 @@ def crawl_venturebeat():
                     if article_date.tzinfo is None:
                         article_date = utc.localize(article_date)
 
-                    if article_date > one_day_ago:
-                        articles.append({
-                            'title': title,
-                            'link': absolute_link,
-                            'summary': re.sub(r'\s+', ' ', summary),
-                            'published_at': article_date.isoformat(),
-                            'source': 'VentureBeat'
-                        })
+                    articles.append({
+                        'title': title,
+                        'link': absolute_link,
+                        'summary': re.sub(r'\s+', ' ', summary),
+                        'published_at': article_date.isoformat(),
+                        'source': 'VentureBeat'
+                    })
                 except ValueError as ve:
                     print(f"DEBUG: 날짜 파싱 오류: {date_str} - {ve}")
                     continue
 
-        print(f"총 {len(articles)}개의 새 기사를 찾았습니다.")
+        print(f"총 {len(articles)}개의 기사를 수집했습니다.")
         print("DEBUG: crawl_venturebeat 함수 종료 (성공)")
         return articles
 
@@ -115,31 +112,50 @@ def crawl_venturebeat():
         if driver:
             driver.quit()
 
+
 def save_to_supabase(articles):
     """크롤링한 기사를 Supabase DB에 저장합니다."""
     if not articles:
-        print("DB에 저장할 새 기사가 없습니다.")
+        print("DB에 저장할 기사가 없습니다.")
         return
 
     if not supabase:
         print("Supabase 클라이언트가 유효하지 않아 저장을 건너뜁니다.")
         return
 
-    unique_articles = {article['link']: article for article in articles}
-    articles_to_save = list(unique_articles.values())
-
-    print(f"{len(articles_to_save)}개의 고유한 기사를 Supabase DB에 저장을 시도합니다.")
+    # 크롤링한 기사들의 링크 목록
+    crawled_links = {article['link'] for article in articles}
 
     try:
-        response = supabase.table('articles').upsert(articles_to_save, on_conflict='link').execute()
+        # DB에 이미 저장된 기사들의 링크 조회
+        existing_links_response = supabase.table('articles').select('link').in_('link', list(crawled_links)).execute()
+        if existing_links_response.data:
+            existing_links = {item['link'] for item in existing_links_response.data}
+            print(f"DB에서 {len(existing_links)}개의 기존 기사 링크를 확인했습니다.")
+        else:
+            existing_links = set()
+            print("DB에 일치하는 기존 기사가 없습니다.")
+
+        # DB에 없는 새로운 기사만 필터링
+        new_articles = [article for article in articles if article['link'] not in existing_links]
+
+        if not new_articles:
+            print("저장할 새로운 기사가 없습니다.")
+            return
+
+        print(f"{len(new_articles)}개의 새로운 기사를 Supabase DB에 저장을 시도합니다.")
+
+        # 새로운 기사만 upsert
+        response = supabase.table('articles').upsert(new_articles, on_conflict='link').execute()
         print(f"Supabase 저장 응답: {response}")
         if response.data:
             print(f"Supabase 저장 완료: {len(response.data)}개 행이 처리되었습니다.")
         else:
-            print(f"Supabase에 데이터가 저장되지 않았습니다. 응답을 확인하세요.")
+            # 이 경우는 보통 에러가 없으면 발생하지 않지만, 디버깅을 위해 남겨둡니다.
+            print(f"Supabase에 데이터가 저장되지 않았습니다. 응답: {response}")
 
     except Exception as e:
-        print(f"Supabase 저장 중 오류 발생: {e}")
+        print(f"Supabase 처리 중 오류 발생: {e}")
 
 
 if __name__ == "__main__":
