@@ -55,7 +55,7 @@ def crawl_venturebeat():
         driver.get(CRAWL_URL)
 
         try:
-            WebDriverWait(driver, 20).until(
+            WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
             )
         except TimeoutException:
