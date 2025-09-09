@@ -60,6 +60,8 @@ def crawl_venturebeat():
             )
         except TimeoutException:
             print("DEBUG: 기사 목록 컨테이너 로드 시간 초과.")
+            driver.save_screenshot('debug_screenshot.png')
+            print("DEBUG: 타임아웃 발생 시점의 스크린샷을 'debug_screenshot.png'로 저장했습니다.")
             return None
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
